@@ -1,0 +1,4 @@
+Model: Pixel 3
+Brand: google
+Device: blueline
+Android: 12 (SDK 31)
