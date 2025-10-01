@@ -1,23 +1,25 @@
-﻿#include <iostream>
+﻿// PixelDeviceInfo.cpp
+// Compile with: MSVC /std:c++17
+// Link: mysqlcppconn.lib, winmm.lib
+
+#include <iostream>
 #include <fstream>
 #include <string>
-#include <sstream>     // <-- fix istringstream
+#include <sstream>
 #include <thread>
 #include <chrono>
 #include <cstdio>
 
 #ifdef _WIN32
 #include <windows.h>
-#endif
-
-
-#ifdef _WIN32
-#include <windows.h>
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib") // For PlaySound
 #endif
 
 #include <cppconn/driver.h>
 #include <cppconn/connection.h>
 #include <cppconn/prepared_statement.h>
+#include <cppconn/resultset.h>
 #include <mysql_driver.h>
 
 using namespace std;
@@ -42,7 +44,7 @@ void printBanner() {
  / ___ |/ /_/ // /___    | |\/| |  /  \| |___
 /_/  |_|\____/ \____/    |_|  |_| /_/\_\\_____| 
 
-        ANDROID FLASH TOOL XT
+        ANDROID DEVICE INFO TOOL
 
 )";
     resetColor();
@@ -55,7 +57,6 @@ void showProgressBar(const string& task, int duration) {
     int barWidth = 40;
     for (int i = 0; i < barWidth; i++) cout << " ";
     cout << "]\r[";
-
     for (int i = 0; i < barWidth; i++) {
         this_thread::sleep_for(chrono::milliseconds(duration / barWidth));
         cout << "#";
@@ -104,11 +105,13 @@ void saveToDatabase(const string& serial, const string& model, const string& bra
     const string& device, const string& androidV, const string& sdk) {
     try {
         sql::mysql::MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-        sql::Connection* con = driver->connect("tcp://localhost:3306", "root", "mapcgx678"); // <-- set your MySQL password
+        unique_ptr<sql::Connection> con(driver->connect("tcp://127.0.0.1:3306", "root", "your_password")); // Set your password
         con->setSchema("pixel_db");
 
-        sql::PreparedStatement* pstmt = con->prepareStatement(
-            "INSERT INTO devices (serial, model, brand, device, android_version, sdk_version) VALUES (?, ?, ?, ?, ?, ?)"
+        unique_ptr<sql::PreparedStatement> pstmt(
+            con->prepareStatement(
+                "INSERT INTO devices (serial, model, brand, device, android_version, sdk_version) VALUES (?, ?, ?, ?, ?, ?)"
+            )
         );
 
         pstmt->setString(1, serial);
@@ -119,8 +122,6 @@ void saveToDatabase(const string& serial, const string& model, const string& bra
         pstmt->setString(6, sdk);
 
         pstmt->execute();
-        delete pstmt;
-        delete con;
 
         setColor(10);
         cout << "[OK] Device info saved to MySQL database.\n";
@@ -163,6 +164,9 @@ int main() {
     system("clear");
 #endif
 
+    // ===== Play background music in loop =====
+    PlaySound(TEXT("background.wav"), NULL, SND_FILENAME | SND_ASYNC | SND_LOOP);
+
     printBanner();
 
     string serial;
@@ -174,6 +178,7 @@ int main() {
         resetColor();
         cout << "\nPress any key to exit...";
         cin.get();
+        PlaySound(NULL, 0, 0); // Stop music
         return 0;
     }
 
@@ -182,7 +187,6 @@ int main() {
     cout << " Serial: " << serial << "\n";
     resetColor();
 
-    // Fetch each property with progress bar
     showProgressBar("[Step 2] Fetching Model", 800);
     string model = getProp("ro.product.model");
 
@@ -198,7 +202,6 @@ int main() {
     showProgressBar("[Step 6] Fetching SDK Version", 800);
     string sdk = getProp("ro.build.version.sdk");
 
-    // Save info
     showProgressBar("[Step 7] Saving to MySQL Database", 1200);
     saveToDatabase(serial, model, brand, device, androidV, sdk);
 
@@ -223,5 +226,7 @@ int main() {
 
     cout << "\nPress any key to exit...";
     cin.get();
+
+    PlaySound(NULL, 0, 0); // Stop background music
     return 0;
 }
